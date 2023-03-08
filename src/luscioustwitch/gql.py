@@ -1,6 +1,6 @@
 import os
 import urllib
-from pytwitch.saferequests import *
+from .saferequests import *
     
 class TwitchGQL_API:
   API_URL = "https://gql.twitch.tv/gql"

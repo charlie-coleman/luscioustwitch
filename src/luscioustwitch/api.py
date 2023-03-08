@@ -1,4 +1,4 @@
-from pytwitch.saferequests import *
+from .saferequests import *
 
 TWITCH_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
