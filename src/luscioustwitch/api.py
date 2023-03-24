@@ -1,4 +1,8 @@
 from .saferequests import *
+from .websocket import *
+from .events import *
+
+import time
 
 TWITCH_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
@@ -6,8 +10,10 @@ class TwitchAPI:
   API_URL = "https://api.twitch.tv/helix"
   CLIENT_ID = ""
   CLIENT_SECRET = ""
+  ACCESS_TOKEN = ""
   DEFAULT_HEADERS = {}
   REQ = RateLimitedRequests(400, 60)
+  TWITCH_WEBSOCKET = None
 
   def __init__(self, credentials):
     """Constructor for TwitchAPI. Must pass in credentials in the form of a dictionary.
@@ -16,10 +22,36 @@ class TwitchAPI:
         credentials (dict): API Credentials. "CLIENT_ID" and "CLIENT_SECRET" should be in the dict.
     """
     self.CLIENT_ID = credentials["CLIENT_ID"]
-    self.CLIENT_SECRET = credentials["CLIENT_SECRET"]
-    self.DEFAULT_HEADERS = { "Authorization": f"Bearer {self.CLIENT_SECRET}", "Client-Id": self.CLIENT_ID }
+    
+    if 'ACCESS_TOKEN' in credentials:
+      self.ACCESS_TOKEN = credentials["ACCESS_TOKEN"]
+    else:
+      self.CLIENT_SECRET = credentials["CLIENT_SECRET"]
+    
+      r = requests.post(f'https://id.twitch.tv/oauth2/token?client_id={self.CLIENT_ID}&client_secret={self.CLIENT_SECRET}&grant_type=client_credentials', headers = {'Content-Type': 'application/x-www-form-urlencoded'})
+    
+      try:
+        self.ACCESS_TOKEN = r.json()['access_token']
+      except:
+        raise Exception("Failed to create access token. Invalid credentials.")
+    
+    self.DEFAULT_HEADERS = { "Authorization": f"Bearer {self.ACCESS_TOKEN}", "Client-Id": self.CLIENT_ID }
+    
+  def refresh_access_token(self, refresh_token):
+    url = f'https://id.twitch.tv/oauth2/token'
+    post_params = {
+      'client_id': self.CLIENT_ID,
+      'client_secret': self.CLIENT_SECRET,
+      'grant_type': 'refresh_token',
+      'refresh_token': refresh_token
+    }
+    url = self.__add_parameters(url, post_params)
+    
+    r = self.REQ.safe_post(url = url, headers = { 'Content-Type': 'application/x-www-form-urlencoded' })
+    
+    return r
 
-  def get_user_id(self, username):
+  def get_user_id(self, login = None):
     """Get user ID from username.
 
     Args:
@@ -28,7 +60,10 @@ class TwitchAPI:
     Returns:
         string: User ID
     """
-    url = f"{self.API_URL}/users?login={username}"
+    if login == None:
+      url = f'{self.API_URL}/users'
+    else:
+      url = f"{self.API_URL}/users?login={login}"
     r = self.REQ.safe_get(url = url, headers = self.DEFAULT_HEADERS)
     
     try:
@@ -270,9 +305,8 @@ class TwitchAPI:
     except:
       return []
 
-  def is_broadcaster_live(self, broadcaster_id = ""):
-    bid = broadcaster_id if broadcaster_id != "" else self.DEFAULT_BROADCASTER_ID
-    stream_info = self.get_streams({ "user_id": bid })
+  def is_user_live(self, user_id):
+    stream_info = self.get_streams({ "user_id": user_id })
     return (len(stream_info) > 0)
   
   def get_emotes(self, user_id):
@@ -305,3 +339,94 @@ class TwitchAPI:
       return r['data']
     except:
       return []
+    
+  def setup_websocket(self, url_override = None):
+    """Connect to the Twitch WebSockets interface for subscribing to events.
+
+    Args:
+        url_override (str, optional): Pass a different websockets url for testing purposes. Defaults to None.
+    """
+    self.TWITCH_WEBSOCKET = TwitchWebSocket(url_override)
+    
+  def websocket_session_id(self):
+    return self.TWITCH_WEBSOCKET.SESSION_ID
+    
+  def join_websocket_thread(self):
+    self.TWITCH_WEBSOCKET.THREAD.join()
+    
+  def _add_subscription(self, params):
+    if self.TWITCH_WEBSOCKET.CONNECTED:
+      print("WebSocket is not connected.")
+      return False
+    
+    url = f'{self.API_URL}/eventsub/subscriptions'
+    
+    resp = self.REQ.safe_post(url = url, headers = self.DEFAULT_HEADERS, json=params)
+    try:
+      return resp['data'][0]['status'] == 'enabled'
+    except:
+      return False
+    
+  def get_active_subscriptions(self):
+    """Get active subscriptions in current WebSocket instance.
+
+    Returns:
+        list: list of active subscriptions
+    """
+    url = f'{self.API_URL}/eventsub/subscriptions'
+    r = self.REQ.safe_get(url = url, headers = self.DEFAULT_HEADERS)
+    try:
+      return r['data']
+    except:
+      if 'error' in r and 'message' in r:
+        print(f"{r['error']}: {r['message']}")
+      return []
+    
+  def add_subscription(self, event : TwitchEvent, callback):
+    """Add a subscription to the WebSocket interface.
+
+    Args:
+        event (TwitchEvent): Desired subscription event type
+        callback (function): Callback for handling notifications matching this subscription
+
+    Returns:
+        bool: Success.
+    """
+    self.TWITCH_WEBSOCKET.add_callback(event.notification_type(), callback)
+    return self._add_subscription(event.params())
+  
+  def subscribe_to_updates(self, user_id, callback):
+    return self.add_subscription(UpdateEvent(user_id, self.websocket_session_id()), callback)
+    
+  def subscribe_to_follows(self, user_id, callback):
+    return self.add_subscription(FollowEvent(user_id, self.websocket_session_id()), callback)
+    
+  def subscribe_to_subscriptions(self, user_id, callback):
+    return self.add_subscription(SubscribeEvent(user_id, self.websocket_session_id()), callback)
+    
+  def subscribe_to_gifted_subscriptions(self, user_id, callback):
+    return self.add_subscription(SubscriptionGiftEvent(user_id, self.websocket_session_id()), callback)
+    
+  def subscribe_to_subscription_messages(self, user_id, callback):
+    return self.add_subscription(SubscriptionMessageEvent(user_id, self.websocket_session_id()), callback)
+  
+  def subscribe_to_cheers(self, user_id, callback):
+    return self.add_subscription(CheerEvent(user_id, self.websocket_session_id()), callback)
+  
+  def subscribe_to_raids(self, user_id, callback):
+    return self.add_subscription(RaidEvent(user_id, self.websocket_session_id()), callback)
+  
+  def subscribe_to_bans(self, user_id, callback):
+    return self.add_subscription(BanEvent(user_id, self.websocket_session_id()), callback)
+  
+  def subscribe_to_unbans(self, user_id, callback):
+    return self.add_subscription(UnbanEvent(user_id, self.websocket_session_id()), callback)
+  
+  def subscribe_to_reward_redemption(self, user_id, callback, reward_id = None):
+    return self.add_subscription(CustomRewardRedemptionAddEvent(user_id, self.websocket_session_id(), reward_id), callback)
+    
+  def subscribe_to_stream_online(self, user_id, callback):
+    return self.add_subscription(StreamOnlineEvent(user_id, self.websocket_session_id()), callback)
+    
+  def subscribe_to_stream_offline(self, user_id, callback):
+    return self.add_subscription(StreamOfflineEvent(user_id, self.websocket_session_id()), callback)
