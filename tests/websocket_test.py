@@ -10,7 +10,7 @@ api = TwitchAPI(cred_json['TWITCH'])
 user_id = api.get_user_id()
 print(f'User ID: {user_id}')
 
-api.setup_websocket("ws://localhost:8181/eventsub")
+api.setup_websocket() # "ws://localhost:8181/eventsub")
 
 api.subscribe_to_follows(user_id,  lambda _, msg: print('New follower!'))
 

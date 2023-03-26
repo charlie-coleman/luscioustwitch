@@ -31,10 +31,10 @@ class TwitchGQL_API:
         }
       }
     ]
-    r = self.REQ.safe_post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
+    r = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
     
     try:
-      return r[0]['data']['clip']
+      return r.json()[0]['data']['clip']
     except:
       return None
     
@@ -51,10 +51,10 @@ class TwitchGQL_API:
       "query": "query{video(id:\"" + video_id + "\"){title,thumbnailURLs(height:180,width:320),createdAt,lengthSeconds,owner{id,displayName}}}",
       "variables": {}
     }
-    r = self.REQ.safe_post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
+    r = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
     
     try:
-      return r['data']['video']
+      return r.json()['data']['video']
     except:
       return None
 
@@ -101,9 +101,9 @@ class TwitchGQL_API:
         "videoID": video_id
       }
     }
-    r = self.REQ.safe_post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
+    r = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
     try:
-      return r['data']['video']['moments']['edges']
+      return r.json()['data']['video']['moments']['edges']
     except:
       return []
     
@@ -134,10 +134,10 @@ class TwitchGQL_API:
     
     comments = []
     while True:
-      r = self.REQ.safe_post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
+      r = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
       
       try:
-        commentlist = r[0]['data']['video']['comments']['edges']
+        commentlist = r.json()[0]['data']['video']['comments']['edges']
       except KeyError:
         print("Improper response format.")
         return comments

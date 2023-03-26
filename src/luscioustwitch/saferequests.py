@@ -12,20 +12,23 @@ class RateLimitedRequests:
   
   @sleep_and_retry
   @limits(calls=__CALLS_PER_MINUTE, period=__PERIOD)
-  def safe_get(self, **params):
-    try:
-      r = requests.get(**params)
-      return r.json()
-    except Exception:
-      traceback.print_exc()
-      return {}
+  def get(self, **params : dict) -> requests.Response:
+    """Rate limited GET
+
+    Returns:
+        requests.Response: GET response
+    """
+    r = requests.get(**params)
+    return r
+  
     
   @sleep_and_retry
   @limits(calls=__CALLS_PER_MINUTE, period=__PERIOD)
-  def safe_post(self, **params):
-    try:
-      r = requests.post(**params)
-      return r.json()
-    except Exception:
-      traceback.print_exc()
-      return {}
+  def post(self, **params : dict) -> requests.Response:
+    """Rate limited POST
+
+    Returns:
+        requests.Response: POST response
+    """
+    r = requests.post(**params)
+    return r
