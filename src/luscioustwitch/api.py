@@ -36,12 +36,15 @@ class TwitchAPI:
   def __raise_req_error(self, response : requests.Response):
     raise Exception(f'Status {response.status_code}: {response.content}')
 
-  def __init__(self, credentials : dict):
+  def __init__(self, credentials : dict, override_api_url: str = ""):
     """Constructor for TwitchAPI. Must pass in credentials in the form of a dictionary.
 
     Args:
         credentials (dict): API Credentials. "CLIENT_ID" and "CLIENT_SECRET" should be in the dict.
     """
+    if override_api_url != "":
+      self.API_URL = override_api_url
+    
     self.CLIENT_ID = credentials["CLIENT_ID"]
     
     if 'ACCESS_TOKEN' in credentials:
