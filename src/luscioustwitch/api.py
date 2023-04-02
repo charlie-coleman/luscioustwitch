@@ -10,6 +10,7 @@ TWITCH_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 class TwitchAPI:
   API_URL = "https://api.twitch.tv/helix"
+  OAUTH_URL = "https://id.twitch.tv/oauth2"
   CLIENT_ID = ""
   CLIENT_SECRET = ""
   ACCESS_TOKEN = ""
@@ -36,7 +37,7 @@ class TwitchAPI:
   def __raise_req_error(self, response : requests.Response):
     raise Exception(f'Status {response.status_code}: {response.content}')
 
-  def __init__(self, credentials : dict, override_api_url: str = ""):
+  def __init__(self, credentials : dict, override_api_url : str = "", override_oauth_url : str = ""):
     """Constructor for TwitchAPI. Must pass in credentials in the form of a dictionary.
 
     Args:
@@ -44,6 +45,9 @@ class TwitchAPI:
     """
     if override_api_url != "":
       self.API_URL = override_api_url
+      
+    if override_oauth_url != "":
+      self.OAUTH_URL = override_oauth_url
     
     self.CLIENT_ID = credentials["CLIENT_ID"]
     
@@ -52,7 +56,7 @@ class TwitchAPI:
     else:
       self.CLIENT_SECRET = credentials["CLIENT_SECRET"]
     
-      r = requests.post(f'https://id.twitch.tv/oauth2/token?client_id={self.CLIENT_ID}&client_secret={self.CLIENT_SECRET}&grant_type=client_credentials', headers = {'Content-Type': 'application/x-www-form-urlencoded'})
+      r = requests.post(f'{self.OAUTH_URL}/token?client_id={self.CLIENT_ID}&client_secret={self.CLIENT_SECRET}&grant_type=client_credentials', headers = {'Content-Type': 'application/x-www-form-urlencoded'})
     
       try:
         self.ACCESS_TOKEN = r.json()['access_token']
@@ -62,7 +66,7 @@ class TwitchAPI:
     self.DEFAULT_HEADERS = { "Authorization": f"Bearer {self.ACCESS_TOKEN}", "Client-Id": self.CLIENT_ID }
     
   def refresh_access_token(self, refresh_token : str) -> dict:
-    url = f'https://id.twitch.tv/oauth2/token'
+    url = f'{self.OAUTH_URL}/token'
     post_params = {
       'client_id': self.CLIENT_ID,
       'client_secret': self.CLIENT_SECRET,
@@ -99,6 +103,32 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()["data"][0]["id"]
+    else:
+      self.__raise_req_error(r)
+      
+  def get_user_info(self, id : str) -> dict:
+    """Get user information
+
+    Args:
+        id (str): user ID
+
+    Returns:
+        dict: user information
+    """
+    
+    """Get user ID from username.
+
+    Args:
+        username (string): Username
+
+    Returns:
+        string: User ID
+    """
+    url = f"{self.API_URL}/users?id={id}"
+    r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
+    
+    if r.status_code == 200:
+      return r.json()["data"][0]
     else:
       self.__raise_req_error(r)
   
@@ -188,7 +218,7 @@ class TwitchAPI:
     
     if r.status_code == 200:
       try:
-        return r.json()['data'], r['pagination']['cursor']
+        return r.json()['data'], r.json()['pagination']['cursor']
       except:
         return r.json()['data'], ""
     else:
@@ -267,7 +297,7 @@ class TwitchAPI:
     
     if r.status_code == 200:
       try:
-        return r.json()['data'], r['pagination']['cursor']
+        return r.json()['data'], r.json()['pagination']['cursor']
       except:
         return r.json()['data'], ""
     else:

@@ -17,6 +17,10 @@ class TestTwitchAPI(unittest.TestCase):
     user_id = self.api.get_user_id("lusciouslollipop")
     self.assertEqual(user_id, '82920215')
     
+  def test_get_user_info(self):
+    user_info = self.api.get_user_info('82920215')
+    self.assertEqual(user_info['login'], 'lusciouslollipop')
+    
   def test_get_channel_info(self):
     user_id = self.api.get_user_id("lusciouslollipop")
     channel_info = self.api.get_channel_info(user_id = user_id)
