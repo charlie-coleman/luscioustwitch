@@ -149,7 +149,7 @@ class TwitchGQL_API:
         cursor = commentdata['cursor']
         
       try:
-        has_next_page = r[0]['data']['video']['comments']['pageInfo']['hasNextPage']
+        has_next_page = r.json()[0]['data']['video']['comments']['pageInfo']['hasNextPage']
       except KeyError:
         print("Issue with comment list. Missing pageInfo or hasNextPage.")
         return comments
