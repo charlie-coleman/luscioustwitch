@@ -1,6 +1,6 @@
-from .saferequests import *
-from .websocket import *
-from .events import *
+from .lushrequests import *
+from .lushwebsocket import *
+from .lushevents import *
 
 from typing import Callable, Tuple
 
@@ -35,7 +35,7 @@ class TwitchAPI:
     return url
   
   def __raise_req_error(self, response : requests.Response):
-    raise Exception(f'Status {response.status_code}: {response.content}')
+    raise Exception(f'Status {response.status_code}: {response.reason}')
 
   def __init__(self, credentials : dict, override_api_url : str = "", override_oauth_url : str = ""):
     """Constructor for TwitchAPI. Must pass in credentials in the form of a dictionary.
@@ -149,16 +149,21 @@ class TwitchAPI:
     else:
       self.__raise_req_error(r)
       
-  def get_category_info(self, category_name : str) -> dict:
+  def get_category_info(self, category_specifier : str, is_name = True) -> dict:
     """Get category information from category name
 
     Args:
         category_name (string): Category name
+        category_id (str): Category ID
 
     Returns:
         dict: Category information
     """
-    url = f"{self.API_URL}/games?name={category_name}"
+    if is_name:
+      url = f"{self.API_URL}/games?name={category_specifier}"
+    else:
+      url = f"{self.API_URL}/games?id={category_specifier}"
+      
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
@@ -190,6 +195,26 @@ class TwitchAPI:
     r: requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
+      return r.json()['data'][0]
+    else:
+      self.__raise_req_error(r)
+      
+  def create_clip(self, broadcaster_id : str, has_delay : bool = False) -> dict:
+    """Create a clip of a broadcast.
+
+    Args:
+        broadcaster_id (str): Broadcaster ID
+        has_delay (bool, optional): Add delay to clip. Defaults to False.
+
+    Returns:
+        dict: Dictionary containing id and edit_url
+    """
+    url = f'{self.API_URL}/clips'
+    url = self.__add_parameters(url, { 'broadcaster_id': broadcaster_id, 'has_delay': 'true' if has_delay else 'false'})
+    
+    r: requests.Response = self.rlrequests.post(url = url, headers = self.DEFAULT_HEADERS)
+    
+    if r.status_code == 202:
       return r.json()['data'][0]
     else:
       self.__raise_req_error(r)

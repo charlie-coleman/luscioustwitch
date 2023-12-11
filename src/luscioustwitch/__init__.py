@@ -1,3 +1,3 @@
-from .api import *
-from .gql import *
-from .websocket import *
+from .lushapi import *
+from .lushgql import *
+from .lushwebsocket import *

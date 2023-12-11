@@ -1,7 +1,6 @@
 import sys
 sys.path.append('../')
 from src.luscioustwitch import *
-from src.luscioustwitch.events import *
 import json
 import unittest
 
@@ -12,21 +11,24 @@ class TestTwitchAPI(unittest.TestCase):
       cred_json = json.load(f)
       f.close()
     self.api = TwitchAPI({ "CLIENT_ID": cred_json['TWITCH']["CLIENT_ID"], "CLIENT_SECRET": cred_json['TWITCH']['CLIENT_SECRET'] })
+    self.gql = TwitchGQL_API()
+    
+    print(self.api.DEFAULT_HEADERS)
 
   def test_get_user_id(self):
-    user_id = self.api.get_user_id("lusciouslollipop")
+    user_id = self.api.get_user_id("lusciousdev")
     self.assertEqual(user_id, '82920215')
     
   def test_get_user_info(self):
     user_info = self.api.get_user_info('82920215')
-    self.assertEqual(user_info['login'], 'lusciouslollipop')
+    self.assertEqual(user_info['login'], 'lusciousdev')
     
   def test_get_channel_info(self):
-    user_id = self.api.get_user_id("lusciouslollipop")
+    user_id = self.api.get_user_id("lusciousdev")
     channel_info = self.api.get_channel_info(user_id = user_id)
     
     self.assertEqual(channel_info['broadcaster_id'], user_id)
-    self.assertEqual(channel_info['broadcaster_login'], "lusciouslollipop")
+    self.assertEqual(channel_info['broadcaster_login'], "lusciousdev")
     
   def test_get_category_info(self):
     game_name = "Old School RuneScape"

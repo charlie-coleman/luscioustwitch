@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../')
 from src.luscioustwitch import *
-from src.luscioustwitch.events import *
+from luscioustwitch.lushevents import *
 import json
 import requests
 import urllib.parse
