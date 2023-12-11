@@ -315,18 +315,21 @@ class TwitchGQL_API:
       print(f"Skipping {video_id} because the filename '{filename}' is taken.")
       return True
     
-    info = self.get_video(video_id)
-    
-    playlist_url_bandwidth = self.__get_playlist_url(video_id, "720")
+    playlist_url_bandwidth = self.__get_playlist_url(video_id, quality)
     playlist_url : str = playlist_url_bandwidth["url"]
     
     base_url = playlist_url[:playlist_url.rindex("/") + 1]
     
     video_parts = self.__get_video_parts_list(playlist_url)
   
-    with open(filename, "wb") as outfile:
-      for part in video_parts:
-        full_url = base_url + part
-        r = requests.get(full_url)
-        outfile.write(r.content)
-      outfile.close()
+    try:
+      with open(filename, "wb") as outfile:
+        for part in video_parts:
+          full_url = base_url + part
+          r = requests.get(full_url)
+          outfile.write(r.content)
+        outfile.close()
+      return True
+    except:
+      print("Error encountered while downloading video {video_id} in {quality}.")
+      return False
