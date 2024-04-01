@@ -11,9 +11,13 @@ TWITCH_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 class TwitchAPI:
   API_URL = "https://api.twitch.tv/helix"
   OAUTH_URL = "https://id.twitch.tv/oauth2"
+  AUTHENTICATED = False
   CLIENT_ID = ""
   CLIENT_SECRET = ""
   ACCESS_TOKEN = ""
+  REFRESH_TOKEN = ""
+  AUTH_TYPE = "client_credentials"
+  EXPIRES_IN = -1
   DEFAULT_HEADERS = {}
   rlrequests = RateLimitedRequests(400, 60)
   TWITCH_WEBSOCKET = None
@@ -49,23 +53,41 @@ class TwitchAPI:
     if override_oauth_url != "":
       self.OAUTH_URL = override_oauth_url
     
-    self.CLIENT_ID = credentials["CLIENT_ID"]
+    self.CLIENT_ID = credentials.get("CLIENT_ID", "")
+    self.CLIENT_SECRET = credentials.get("CLIENT_SECRET", "")
+    
+    if self.CLIENT_ID == "":
+      raise Exception("Missing Client ID.")
     
     if 'ACCESS_TOKEN' in credentials:
-      self.ACCESS_TOKEN = credentials["ACCESS_TOKEN"]
+      self.ACCESS_TOKEN = credentials.get("ACCESS_TOKEN", "")
+      self.EXPIRES_IN = credentials.get("EXPIRES_IN", 0)
+      self.REFRESH_TOKEN = credentials.get("REFRESH_TOKEN", "")
+      self.AUTH_TYPE = credentials.get("AUTH_TYPE", "authorization_code")
     else:
-      self.CLIENT_SECRET = credentials["CLIENT_SECRET"]
-    
+      self.AUTH_TYPE = "client_credentials"
+      
       r = requests.post(f'{self.OAUTH_URL}/token?client_id={self.CLIENT_ID}&client_secret={self.CLIENT_SECRET}&grant_type=client_credentials', headers = {'Content-Type': 'application/x-www-form-urlencoded'})
     
       try:
         self.ACCESS_TOKEN = r.json()['access_token']
+        self.EXPIRES_IN = r.json()["expires_in"]
       except:
         raise Exception("Failed to create access token. Invalid credentials.")
     
+    self.AUTHENTICATED = True
     self.DEFAULT_HEADERS = { "Authorization": f"Bearer {self.ACCESS_TOKEN}", "Client-Id": self.CLIENT_ID }
     
-  def refresh_access_token(self, refresh_token : str) -> dict:
+  def refresh_authorization(self) -> bool:
+    if self.AUTH_TYPE == "client_credentials":
+      return self._refresh_client_credential_authentication()
+    else:
+      return self.refresh_access_token()
+    
+  def refresh_access_token(self, refresh_token : str = None) -> bool:
+    if refresh_token == None:
+      refresh_token = self.REFRESH_TOKEN
+    
     url = f'{self.OAUTH_URL}/token'
     post_params = {
       'client_id': self.CLIENT_ID,
@@ -79,12 +101,31 @@ class TwitchAPI:
     
     try:
       self.ACCESS_TOKEN = r.json()['access_token']
+      self.REFRESH_TOKEN = r.json()['refresh_token']
     except:
+      self.AUTHENTICATED = False
       raise Exception(f"{r.status_code}: {r.content}.\nFailed to refresh access token.")
     
     self.DEFAULT_HEADERS = { "Authorization": f"Bearer {self.ACCESS_TOKEN}", "Client-Id": self.CLIENT_ID }
+    self.AUTHENTICATED = True
     
-    return r
+    return self.AUTHENTICATED
+  
+  def _refresh_client_credential_authentication(self) -> bool:
+    r = requests.post(f'{self.OAUTH_URL}/token?client_id={self.CLIENT_ID}&client_secret={self.CLIENT_SECRET}&grant_type=client_credentials', headers = {'Content-Type': 'application/x-www-form-urlencoded'})
+  
+    try:
+      self.ACCESS_TOKEN = r.json()['access_token']
+      self.EXPIRES_IN = r.json()["expires_in"]
+    except:
+      self.AUTHENTICATED = False
+      raise Exception("Failed to create access token. Invalid credentials.")
+    
+    self.DEFAULT_HEADERS = { "Authorization": f"Bearer {self.ACCESS_TOKEN}", "Client-Id": self.CLIENT_ID }
+    self.AUTHENTICATED = True
+    
+    return self.AUTHENTICATED
+    
 
   def get_user_id(self, login : str = "") -> str:
     """Get user ID from username.
@@ -103,6 +144,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()["data"][0]["id"]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_user_id(login)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
       
@@ -129,6 +175,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()["data"][0]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_user_id(id)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
   
@@ -146,6 +197,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data'][0]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_channel_info(user_id)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
       
@@ -168,6 +224,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()["data"][0]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_category_info(category_specifier, is_name)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
       
@@ -196,6 +257,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data'][0]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_clip(clip_id)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
       
@@ -216,6 +282,11 @@ class TwitchAPI:
     
     if r.status_code == 202:
       return r.json()['data'][0]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.create_clip(broadcaster_id, has_delay)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
 
@@ -246,6 +317,11 @@ class TwitchAPI:
         return r.json()['data'], r.json()['pagination']['cursor']
       except:
         return r.json()['data'], ""
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_clips(params)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
 
@@ -292,6 +368,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data'][0]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_videos(video_id)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
 
@@ -325,6 +406,11 @@ class TwitchAPI:
         return r.json()['data'], r.json()['pagination']['cursor']
       except:
         return r.json()['data'], ""
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_videos(params)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
 
@@ -383,6 +469,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data']
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_streams(params)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
 
@@ -404,6 +495,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data']
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_emotes(user_id)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
   
@@ -418,6 +514,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data']
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_global_emotes()
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
     
@@ -440,6 +541,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data']
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_custom_rewards(params)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
     
@@ -450,6 +556,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data'][0]
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.create_custom_reward(broadcaster_id, reward_params)
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
     
@@ -478,6 +589,11 @@ class TwitchAPI:
     
     if r.status_code == 202:
       return r.json()['data'][0]['status'] == 'enabled'
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self._add_subscription(params)
+      else:
+        self.__raise_req_error(r)
     else:
       return False
     
@@ -492,6 +608,11 @@ class TwitchAPI:
     
     if r.status_code == 200:
       return r.json()['data']
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_active_subscriptions()
+      else:
+        self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
     

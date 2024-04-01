@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "luscioustwitch"
-version = "0.3.13"
+version = "0.3.15"
 authors = [
-  { name="Charlie Coleman", email="me@charlie-coleman.com" },
+  { name="luscious.dev", email="admin@luscious.dev" },
 ]
 description = "Twitch API Wrapper"
 readme = "README.md"
