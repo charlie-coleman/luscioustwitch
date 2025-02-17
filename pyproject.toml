@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "requests", "os", "re", "json", "websockets", "typing", "datetime", "ratelimit"]
+requires = ["setuptools", "requests", "os", "regex", "json", "websockets", "typing", "datetime", "ratelimit"]
 build-backend = "setuptools.build_meta"
 
 [project]
