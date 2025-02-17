@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools", "requests"]
+requires = ["setuptools", "requests", "os", "re", "json", "websockets", "typing", "datetime", "ratelimit"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,7 +10,6 @@ authors = [
 ]
 description = "Twitch API Wrapper"
 readme = "README.md"
-license-file = "LICENSE"
 requires-python = ">=3.8"
 classifiers = [
   "Programming Language :: Python :: 3",

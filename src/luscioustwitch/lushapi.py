@@ -5,8 +5,6 @@ from .lushtypes import *
 
 import typing
 
-import time
-
 class TwitchAPI:
   API_URL = "https://api.twitch.tv/helix"
   OAUTH_URL = "https://id.twitch.tv/oauth2"
