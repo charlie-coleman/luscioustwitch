@@ -1,7 +1,9 @@
 import os
 import re
-import urllib
+import typing
+
 from .lushrequests import *
+from .lushtypes import *
 
 EXT_X_MEDIA_Regex = re.compile(r"#EXT-X-MEDIA:TYPE=([A-Za-z0-9]+),GROUP-ID=\"([A-Za-z0-9]+)\",NAME=\"([A-Za-z0-9]+)\",AUTOSELECT=([A-Za-z0-9]+),DEFAULT=([A-Za-z0-9]+)")
 EXT_X_STREAM_INF_Regex = re.compile(r"#EXT-X-STREAM-INF:BANDWIDTH=(\d+),CODECS=\"([A-Za-z0-9\.,]+)\",RESOLUTION=([A-Za-z0-9]+),VIDEO=\"([A-Za-z0-9]+)\"")
@@ -11,8 +13,11 @@ class TwitchGQL_API:
   CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
   DEFAULT_HEADERS = { "Client-ID": CLIENT_ID }
   REQ = RateLimitedRequests(400, 60)
+  
+  def __raise_req_error(self, response : requests.Response):
+    raise Exception(f'Status {response.status_code}: {response.reason}')
     
-  def get_clip(self, clip_id):
+  def get_clip(self, clip_id : str) -> GQL_Clip:
     """Get clip information from Twitch's GQL API.
 
     Args:
@@ -35,12 +40,18 @@ class TwitchGQL_API:
         }
       }
     ]
-    r = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
+    r : requests.Response = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
     
-    try:
-      return r.json()[0]['data']['clip']
-    except:
-      return None
+    if r.status_code == 200:
+      response_json : typing.List[dict] = r.json()
+      if len(response_json) > 0:
+        response_data : dict = response_json[0].get("data", {})
+        response_clip : dict = response_data.get("clip", {})
+        return GQL_Clip(response_clip)
+      else:
+        raise GQL_Clip.DoesNotExist(f"Clip ID \"{clip_id}\" was not found.")
+    else:
+      self.__raise_req_error(r)
     
   def get_video(self, video_id):
     """Get video info.
@@ -52,15 +63,18 @@ class TwitchGQL_API:
         dict: Video information
     """
     content = {
-      "query": "query{video(id:\"" + video_id + "\"){title,thumbnailURLs(height:180,width:320),createdAt,lengthSeconds,owner{id,displayName}}}",
+      "query": "query{video(id:\"" + video_id + "\"){id,title,thumbnailURLs(height:180,width:320),createdAt,publishedAt,lengthSeconds,owner{id,displayName}}}",
       "variables": {}
     }
-    r = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
+    r : requests.Response = self.REQ.post(url = self.API_URL, headers = self.DEFAULT_HEADERS, json = content)
     
-    try:
-      return r.json()['data']['video']
-    except:
-      return None
+    if r.status_code == 200:
+        response_json : dict = r.json()
+        response_data : dict = response_json.get("data", {})
+        response_video : dict = response_data.get("video", {})
+        return GQL_Video(response_video)
+    else:
+      self.__raise_req_error(r)
 
   def download_clip(self, clip_id, filename, saveover = False):
     """Download a Twitch clip.
@@ -79,9 +93,9 @@ class TwitchGQL_API:
     
     info = self.get_clip(clip_id)
     
-    url = info["videoQualities"][0]["sourceURL"]
-    signature = info["playbackAccessToken"]["signature"]
-    token = urllib.parse.quote(info["playbackAccessToken"]["value"])
+    url = info.videoQualities[0].sourceURL
+    signature = info.playbackAccessToken.signature
+    token = info.playbackAccessToken.value
     full_url = f"{url}?sig={signature}&token={token}"
     
     try:
@@ -300,7 +314,7 @@ class TwitchGQL_API:
     except:
       return []
   
-  def download_video(self, video_id, filename, quality = "720", saveover = False):
+  def download_video(self, video_id : str, filename, quality = "720", saveover = False):
     """Download a Twitch video. Outputs a .ts file that can be converted to your choice of format with ffmpeg.
 
     Args:
@@ -322,14 +336,9 @@ class TwitchGQL_API:
     
     video_parts = self.__get_video_parts_list(playlist_url)
   
-    try:
-      with open(filename, "wb") as outfile:
-        for part in video_parts:
-          full_url = base_url + part
-          r = requests.get(full_url)
-          outfile.write(r.content)
-        outfile.close()
-      return True
-    except:
-      print("Error encountered while downloading video {video_id} in {quality}.")
-      return False
+    with open(filename, "wb") as outfile:
+      for part in video_parts:
+        full_url = base_url + part
+        r = requests.get(full_url)
+        outfile.write(r.content)
+      outfile.close()

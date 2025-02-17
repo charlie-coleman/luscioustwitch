@@ -1,5 +1,4 @@
 import requests
-import traceback
 from ratelimit import limits, sleep_and_retry
 
 class RateLimitedRequests:

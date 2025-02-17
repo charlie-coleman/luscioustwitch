@@ -1,12 +1,11 @@
 from .lushrequests import *
 from .lushwebsocket import *
 from .lushevents import *
+from .lushtypes import *
 
-from typing import Callable, Tuple
+import typing
 
 import time
-
-TWITCH_API_TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 
 class TwitchAPI:
   API_URL = "https://api.twitch.tv/helix"
@@ -136,54 +135,64 @@ class TwitchAPI:
     Returns:
         string: User ID
     """
-    if login == "":
-      url = f'{self.API_URL}/users'
-    else:
-      url = f"{self.API_URL}/users?login={login}"
+    twitch_user = self.get_user_by_login(login)
+    return twitch_user.user_id
+      
+  def get_user(self, user_id : str) -> TwitchUser:
+    """Get user by user ID
+
+    Args:
+        user_id (str): user ID
+
+    Returns:
+        dict: user information
+    """
+    url = f"{self.API_URL}/users?id={user_id}"
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()["data"][0]["id"]
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return TwitchUser(response_data[0])
+      else:
+        raise TwitchUser.DoesNotExist(f"User ID \"{user_id}\" was not found.")
     elif r.status_code == 401:
       if self.refresh_authorization():
-        return self.get_user_id(login)
+        return self.get_user(user_id)
       else:
         self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
       
-  def get_user_info(self, id : str) -> dict:
-    """Get user information
+  def get_user_by_login(self, login : str) -> TwitchUser:
+    """Get user ID from login.
 
     Args:
-        id (str): user ID
-
-    Returns:
-        dict: user information
-    """
-    
-    """Get user ID from username.
-
-    Args:
-        username (string): Username
+        login (string): Login
 
     Returns:
         string: User ID
     """
-    url = f"{self.API_URL}/users?id={id}"
+    url = f"{self.API_URL}/users?login={login}"
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()["data"][0]
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return TwitchUser(response_data[0])
+      else:
+        raise TwitchUser.DoesNotExist(f"User login \"{login}\" was not found.")
     elif r.status_code == 401:
       if self.refresh_authorization():
-        return self.get_user_id(id)
+        return self.get_user_by_login(login)
       else:
         self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
   
-  def get_channel_info(self, user_id : str) -> dict:
+  def get_channel_info(self, broadcaster_id : str) -> TwitchChannelInfo:
     """Get Channel Information.
 
     Args:
@@ -192,41 +201,73 @@ class TwitchAPI:
     Returns:
         dict: Channel information
     """
-    url = f"{self.API_URL}/channels?broadcaster_id={user_id}"
+    url = f"{self.API_URL}/channels?broadcaster_id={broadcaster_id}"
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()['data'][0]
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return TwitchChannelInfo(response_data[0])
+      else:
+        raise TwitchChannelInfo.DoesNotExist(f"Broadcaster ID \"{broadcaster_id}\" was not found.")
     elif r.status_code == 401:
       if self.refresh_authorization():
-        return self.get_channel_info(user_id)
+        return self.get_channel_info(broadcaster_id)
       else:
         self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
       
-  def get_category_info(self, category_specifier : str, is_name = True) -> dict:
+  def get_category_by_id(self, category_id : str) -> TwitchCategoryInfo:
     """Get category information from category name
 
     Args:
-        category_name (string): Category name
         category_id (str): Category ID
 
     Returns:
         dict: Category information
     """
-    if is_name:
-      url = f"{self.API_URL}/games?name={category_specifier}"
-    else:
-      url = f"{self.API_URL}/games?id={category_specifier}"
-      
+    url = f"{self.API_URL}/games?id={category_id}"
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()["data"][0]
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return TwitchChannelInfo(response_data[0])
+      else:
+        raise TwitchChannelInfo.DoesNotExist(f"Category ID \"{category_id}\" was not found.")
     elif r.status_code == 401:
       if self.refresh_authorization():
-        return self.get_category_info(category_specifier, is_name)
+        return self.get_category_by_id(category_id)
+      else:
+        self.__raise_req_error(r)
+    else:
+      self.__raise_req_error(r)
+      
+  def get_category_by_name(self, category_name : str) -> TwitchCategoryInfo:
+    """Get category information from category name
+
+    Args:
+        category_id (str): Category ID
+
+    Returns:
+        dict: Category information
+    """
+    url = f"{self.API_URL}/games?name={category_name}"  
+    r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
+    
+    if r.status_code == 200:
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return TwitchCategoryInfo(response_data[0])
+      else:
+        raise TwitchCategoryInfo.DoesNotExist(f"Category \"{category_name}\" was not found.")
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_category_by_name(category_name)
       else:
         self.__raise_req_error(r)
     else:
@@ -241,9 +282,9 @@ class TwitchAPI:
     Returns:
         str: _description_
     """
-    return self.get_category_info(category_name)['id']
+    return self.get_category_by_name(category_name).category_id
 
-  def get_clip(self, clip_id : str) -> dict:
+  def get_clip(self, clip_id : str) -> TwitchClip:
     """Get info for one clip from ID.
 
     Args:
@@ -256,7 +297,12 @@ class TwitchAPI:
     r: requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()['data'][0]
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return TwitchClip(response_data[0])
+      else:
+        raise TwitchClip.DoesNotExist(f"Clip ID \"{clip_id}\" was not found.")
     elif r.status_code == 401:
       if self.refresh_authorization():
         return self.get_clip(clip_id)
@@ -281,7 +327,12 @@ class TwitchAPI:
     r: requests.Response = self.rlrequests.post(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 202:
-      return r.json()['data'][0]
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return CreateClipResponse(response_data[0])
+      else:
+        raise CreateClipResponse.DoesNotExist("Create clip failed.")
     elif r.status_code == 401:
       if self.refresh_authorization():
         return self.create_clip(broadcaster_id, has_delay)
@@ -290,7 +341,7 @@ class TwitchAPI:
     else:
       self.__raise_req_error(r)
 
-  def get_clips(self, params : dict) -> Tuple[list, str]:
+  def get_clips(self, params : dict) -> typing.List[TwitchClip]:
     """Get clips based on params.
 
     Args:
@@ -313,10 +364,14 @@ class TwitchAPI:
     r : requests.Response = self.rlrequests.get(url = url, headers=self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      try:
-        return r.json()['data'], r.json()['pagination']['cursor']
-      except:
-        return r.json()['data'], ""
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      response_pagination : dict = response_json.get("pagination", {})
+      
+      video_list = [TwitchClip(data) for data in response_data]
+      cursor = response_pagination['cursor'] if "cursor" in response_pagination else ""
+      
+      return video_list, cursor
     elif r.status_code == 401:
       if self.refresh_authorization():
         return self.get_clips(params)
@@ -325,7 +380,7 @@ class TwitchAPI:
     else:
       self.__raise_req_error(r)
 
-  def get_all_clips(self, params : dict) -> list:
+  def get_all_clips(self, params : dict) -> typing.List[TwitchClip]:
     """Get all clips based on params (auto-pagination).
 
     Args:
@@ -354,11 +409,11 @@ class TwitchAPI:
       else:
         params["after"] = cursor
 
-  def get_video(self, video_id : str) -> dict:
+  def get_video(self, video_id : typing.Union[str, int]) -> TwitchVideo:
     """Get info for one video from ID.
 
     Args:
-        video_id (string): Video ID
+        video_id (string|int): Video ID
 
     Returns:
         dict: Video info
@@ -367,16 +422,21 @@ class TwitchAPI:
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()['data'][0]
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      if len(response_data) > 0:
+        return TwitchVideo(response_data[0])
+      else:
+        raise TwitchVideo.DoesNotExist(f"Video ID \"{video_id}\" returned no results.")
     elif r.status_code == 401:
       if self.refresh_authorization():
-        return self.get_videos(video_id)
+        return self.get_video(video_id)
       else:
         self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
 
-  def get_videos(self, params : dict) -> Tuple[list, str]:
+  def get_videos(self, params : dict) -> typing.Tuple[typing.List[TwitchVideo], str]:
     """Get videos based on params.
 
     Args:
@@ -402,10 +462,14 @@ class TwitchAPI:
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      try:
-        return r.json()['data'], r.json()['pagination']['cursor']
-      except:
-        return r.json()['data'], ""
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      response_pagination : dict = response_json.get("pagination", {})
+      
+      video_list = [TwitchVideo(data) for data in response_data]
+      cursor = response_pagination['cursor'] if "cursor" in response_pagination else ""
+      
+      return video_list, cursor
     elif r.status_code == 401:
       if self.refresh_authorization():
         return self.get_videos(params)
@@ -414,7 +478,7 @@ class TwitchAPI:
     else:
       self.__raise_req_error(r)
 
-  def get_all_videos(self, params : dict) -> list:
+  def get_all_videos(self, params : dict) -> typing.List[TwitchVideo]:
     """Get all videos based on params (auto-pagination).
 
     Args:
@@ -431,21 +495,61 @@ class TwitchAPI:
             after (string): forward pagination
 
     Returns:
-        list: list of video info
+        list: list of videos
     """
-    all_clips = []
+    all_videos = []
     while True:
       vids, cursor = self.get_videos(params)
 
       for vod in vids:
-        all_clips.append(vod)
+        all_videos.append(vod)
       
       if cursor == "":
-        return all_clips
+        return all_videos
       else:
         params["after"] = cursor
 
-  def get_streams(self, params : dict) -> dict:
+  def get_streams(self, params : dict) -> typing.Tuple[typing.List[TwitchStream], str]:
+    """Get a list of streams.
+
+    Args:
+        params (dict): Dictionary of parameters for the API request. The valid params are:
+            user_id (string): User ID
+            user_login (string): Username
+            game_id (string): Game/Category ID
+            type (string): "all" or "live"
+            language (string): ISO 639-1
+            first (int): fetch the first n streams
+            before (string): reverse pagination
+            after (string): forward pagination
+
+    Returns:
+        list: list of stream info
+        str: Pagination cursor
+    """
+    url = f"{self.API_URL}/streams/"
+    url = self.__add_parameters(url, params)
+    
+    r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
+    
+    if r.status_code == 200:
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      response_pagination : dict = response_json.get("pagination", {})
+      
+      stream_list = [TwitchStream(data) for data in response_data]
+      cursor = response_pagination['cursor'] if "cursor" in response_pagination else ""
+      
+      return stream_list, cursor
+    elif r.status_code == 401:
+      if self.refresh_authorization():
+        return self.get_streams(params)
+      else:
+        self.__raise_req_error(r)
+    else:
+      self.__raise_req_error(r)
+      
+  def get_all_streams(self, params : dict) -> typing.List[TwitchStream]:
     """Get a list of streams.
 
     Args:
@@ -462,48 +566,52 @@ class TwitchAPI:
     Returns:
         list: list of stream info
     """
-    url = f"{self.API_URL}/streams/"
-    url = self.__add_parameters(url, params)
-    
-    r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
-    
-    if r.status_code == 200:
-      return r.json()['data']
-    elif r.status_code == 401:
-      if self.refresh_authorization():
-        return self.get_streams(params)
+    all_streams = []
+    while True:
+      streams, cursor = self.get_streams(params)
+
+      for s in streams:
+        all_streams.append(s)
+      
+      if cursor == "":
+        return all_streams
       else:
-        self.__raise_req_error(r)
-    else:
-      self.__raise_req_error(r)
+        params["after"] = cursor
 
   def is_user_live(self, user_id : str) -> bool:
-    stream_info = self.get_streams({ "user_id": user_id })
+    stream_info = self.get_all_streams({ "user_id": user_id })
     return (len(stream_info) > 0)
   
-  def get_emotes(self, user_id : str) -> list:
+  def get_channel_emotes(self, broadcaster_id : str) -> typing.Tuple[typing.List[TwitchChannelEmote], str]:
     """Get Channel Emotes
 
     Args:
-        user_id (string): User ID
+        broadcaster_id (string): User ID
 
     Returns:
-        list: List of emote information.
+        list: List of channel emotes.
+        str: Template
     """
-    url = f"{self.API_URL}/chat/emotes?broadcaster_id={user_id}"
+    url = f"{self.API_URL}/chat/emotes?broadcaster_id={broadcaster_id}"
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()['data']
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      
+      emote_list = [TwitchChannelEmote(data) for data in response_data]
+      template : str = response_json.get("template", "")
+      
+      return emote_list, template
     elif r.status_code == 401:
       if self.refresh_authorization():
-        return self.get_emotes(user_id)
+        return self.get_channel_emotes(broadcaster_id)
       else:
         self.__raise_req_error(r)
     else:
       self.__raise_req_error(r)
   
-  def get_global_emotes(self) -> list:
+  def get_global_emotes(self) -> typing.Tuple[typing.List[TwitchEmote], str]:
     """Get Global Emotes.
 
     Returns:
@@ -513,7 +621,13 @@ class TwitchAPI:
     r : requests.Response = self.rlrequests.get(url = url, headers = self.DEFAULT_HEADERS)
     
     if r.status_code == 200:
-      return r.json()['data']
+      response_json : dict = r.json()
+      response_data : typing.List[dict] = response_json.get("data", [])
+      
+      emote_list = [TwitchEmote(data) for data in response_data]
+      template : str = response_json.get("template", "")
+      
+      return emote_list, template
     elif r.status_code == 401:
       if self.refresh_authorization():
         return self.get_global_emotes()
@@ -629,38 +743,38 @@ class TwitchAPI:
     self.TWITCH_WEBSOCKET.add_callback(event.notification_type(), callback)
     return self._add_subscription(event.params())
   
-  def subscribe_to_updates(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_updates(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(UpdateEvent(user_id, self.websocket_session_id()), callback)
     
-  def subscribe_to_follows(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_follows(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(FollowEvent(user_id, self.websocket_session_id()), callback)
     
-  def subscribe_to_subscriptions(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_subscriptions(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(SubscribeEvent(user_id, self.websocket_session_id()), callback)
     
-  def subscribe_to_gifted_subscriptions(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_gifted_subscriptions(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(SubscriptionGiftEvent(user_id, self.websocket_session_id()), callback)
     
-  def subscribe_to_subscription_messages(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_subscription_messages(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(SubscriptionMessageEvent(user_id, self.websocket_session_id()), callback)
   
-  def subscribe_to_cheers(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_cheers(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(CheerEvent(user_id, self.websocket_session_id()), callback)
   
-  def subscribe_to_raids(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_raids(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(RaidEvent(user_id, self.websocket_session_id()), callback)
   
-  def subscribe_to_bans(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_bans(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(BanEvent(user_id, self.websocket_session_id()), callback)
   
-  def subscribe_to_unbans(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_unbans(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(UnbanEvent(user_id, self.websocket_session_id()), callback)
   
-  def subscribe_to_reward_redemption(self, user_id : str, callback : Callable[[object, str], None], reward_id : str = None) -> bool:
+  def subscribe_to_reward_redemption(self, user_id : str, callback : typing.Callable[[object, str], None], reward_id : str = None) -> bool:
     return self.add_subscription(CustomRewardRedemptionAddEvent(user_id, self.websocket_session_id(), reward_id), callback)
     
-  def subscribe_to_stream_online(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_stream_online(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(StreamOnlineEvent(user_id, self.websocket_session_id()), callback)
     
-  def subscribe_to_stream_offline(self, user_id : str, callback : Callable[[object, str], None]) -> bool:
+  def subscribe_to_stream_offline(self, user_id : str, callback : typing.Callable[[object, str], None]) -> bool:
     return self.add_subscription(StreamOfflineEvent(user_id, self.websocket_session_id()), callback)
